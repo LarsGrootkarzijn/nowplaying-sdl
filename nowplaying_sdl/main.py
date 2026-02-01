@@ -646,6 +646,27 @@ def main():
                             else:
                                 liked_state[0] = not liked_state[0]
                             logger.info(f"Liked: {liked_state[0]}")
+                        elif button == 'volume_slider':
+                            # Handle volume slider touch
+                            if args.volume_slider and button_rects[0]:
+                                slider_rect = button_rects[0].get('volume_slider')
+                                if slider_rect:
+                                    sx, sy, sw, sh = slider_rect
+                                    # Calculate relative position in slider
+                                    if args.rotation in (90, 270):
+                                        # Vertical slider
+                                        rel_pos = (touch_y - sy) / sh if sh > 0 else 0
+                                    else:
+                                        # Horizontal slider
+                                        rel_pos = (touch_x - sx) / sw if sw > 0 else 0
+                                    # Clamp to 0-1 and convert to percentage
+                                    new_volume = max(0, min(100, rel_pos * 100))
+                                    logger.info(f"Setting volume to {new_volume:.0f}%")
+                                    if ac_client and not args.demo:
+                                        if ac_client.set_volume(new_volume):
+                                            volume_state[0] = new_volume
+                                    else:
+                                        volume_state[0] = new_volume
                 elif event.type == sdl2.SDL_MOUSEBUTTONDOWN:
                     # Reset activity timer on mouse click
                     logger.info(f"Mouse click detected at ({event.button.x}, {event.button.y})")
@@ -693,6 +714,27 @@ def main():
                             else:
                                 liked_state[0] = not liked_state[0]
                             logger.info(f"Liked: {liked_state[0]}")
+                        elif button == 'volume_slider':
+                            # Handle volume slider click
+                            if args.volume_slider and button_rects[0]:
+                                slider_rect = button_rects[0].get('volume_slider')
+                                if slider_rect:
+                                    sx, sy, sw, sh = slider_rect
+                                    # Calculate relative position in slider
+                                    if args.rotation in (90, 270):
+                                        # Vertical slider
+                                        rel_pos = (event.button.y - sy) / sh if sh > 0 else 0
+                                    else:
+                                        # Horizontal slider
+                                        rel_pos = (event.button.x - sx) / sw if sw > 0 else 0
+                                    # Clamp to 0-1 and convert to percentage
+                                    new_volume = max(0, min(100, rel_pos * 100))
+                                    logger.info(f"Setting volume to {new_volume:.0f}%")
+                                    if ac_client and not args.demo:
+                                        if ac_client.set_volume(new_volume):
+                                            volume_state[0] = new_volume
+                                    else:
+                                        volume_state[0] = new_volume
             
             # Get latest now playing data
             now_playing_data = ac_client.get_current_data() if ac_client else None

@@ -158,6 +158,14 @@ class AudioControlClient:
             raw_data = self.fetch_now_playing()
             new_data = self.format_now_playing(raw_data)
             
+            # Poll volume state
+            volume_data = self.get_volume()
+            if volume_data:
+                new_data['volume'] = volume_data.get('percentage', 50)
+            else:
+                # Default to 50 if volume not available
+                new_data['volume'] = 50
+            
             # Check for changes
             current_song = (new_data.get('title'), new_data.get('artist'))
             current_state = new_data.get('state')
@@ -185,6 +193,13 @@ class AudioControlClient:
         # Do initial fetch synchronously
         raw_data = self.fetch_now_playing()
         self.current_data = self.format_now_playing(raw_data)
+        
+        # Get initial volume state
+        volume_data = self.get_volume()
+        if volume_data:
+            self.current_data['volume'] = volume_data.get('percentage', 50)
+        else:
+            self.current_data['volume'] = 50
         
         # Check if favorites API is available
         self.check_favorites_support()
@@ -546,3 +561,195 @@ class AudioControlClient:
             player_name: Name of the player. If None, uses active player
         """
         return self.send_player_command('previous', player_name)
+    
+    def get_volume(self) -> Optional[Dict[str, Any]]:
+        """Get current volume state
+        
+        Returns:
+            Dictionary with volume information or None if unavailable
+            Example: {"percentage": 75.0, "decibels": -12.0, "raw_value": 120}
+        """
+        try:
+            url = f"{self.api_url}/volume/state"
+            logger.debug(f"Getting volume state: {url}")
+            
+            request = urllib.request.Request(
+                url,
+                headers={'User-Agent': 'NowPlayingSDL/1.0'}
+            )
+            
+            with urllib.request.urlopen(request, timeout=5) as response:
+                data = response.read().decode('utf-8')
+                result = json.loads(data)
+                logger.debug(f"Volume state response: {result}")
+                return result
+                
+        except urllib.error.HTTPError as e:
+            if e.code == 503:
+                logger.debug("Volume control not available on this device")
+            else:
+                logger.error(f"HTTP error getting volume: {e.code} {e.reason}")
+            return None
+        except Exception as e:
+            logger.error(f"Error getting volume: {e}")
+            return None
+    
+    def set_volume(self, percentage: float) -> bool:
+        """Set volume to a specific percentage
+        
+        Args:
+            percentage: Volume level (0-100)
+        
+        Returns:
+            True if successful, False otherwise
+        """
+        if not 0 <= percentage <= 100:
+            logger.warning(f"Volume percentage {percentage} is out of range (0-100)")
+            return False
+        
+        try:
+            url = f"{self.api_url}/volume/set"
+            logger.info(f"Setting volume to {percentage}%")
+            
+            data = {"percentage": percentage}
+            json_data = json.dumps(data).encode('utf-8')
+            
+            request = urllib.request.Request(
+                url,
+                data=json_data,
+                headers={
+                    'User-Agent': 'NowPlayingSDL/1.0',
+                    'Content-Type': 'application/json'
+                },
+                method='POST'
+            )
+            
+            with urllib.request.urlopen(request, timeout=5) as response:
+                data = response.read().decode('utf-8')
+                result = json.loads(data)
+                
+                if result.get('success'):
+                    logger.info(f"Volume set to {percentage}%")
+                    return True
+                else:
+                    logger.warning(f"Failed to set volume: {result.get('message')}")
+                    return False
+                    
+        except urllib.error.HTTPError as e:
+            logger.error(f"HTTP error setting volume: {e.code} {e.reason}")
+            return False
+        except Exception as e:
+            logger.error(f"Error setting volume: {e}")
+            return False
+    
+    def volume_up(self, amount: float = 5.0) -> bool:
+        """Increase volume by a percentage amount
+        
+        Args:
+            amount: Percentage to increase (default: 5.0)
+        
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            import urllib.parse
+            params = urllib.parse.urlencode({'amount': amount})
+            url = f"{self.api_url}/volume/increase?{params}"
+            logger.debug(f"Increasing volume by {amount}%")
+            
+            request = urllib.request.Request(
+                url,
+                method='POST',
+                headers={'User-Agent': 'NowPlayingSDL/1.0'}
+            )
+            
+            with urllib.request.urlopen(request, timeout=5) as response:
+                data = response.read().decode('utf-8')
+                result = json.loads(data)
+                
+                if result.get('success'):
+                    logger.info(f"Volume increased: {result.get('message')}")
+                    return True
+                else:
+                    logger.warning(f"Failed to increase volume: {result.get('message')}")
+                    return False
+                    
+        except urllib.error.HTTPError as e:
+            logger.error(f"HTTP error increasing volume: {e.code} {e.reason}")
+            return False
+        except Exception as e:
+            logger.error(f"Error increasing volume: {e}")
+            return False
+    
+    def volume_down(self, amount: float = 5.0) -> bool:
+        """Decrease volume by a percentage amount
+        
+        Args:
+            amount: Percentage to decrease (default: 5.0)
+        
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            import urllib.parse
+            params = urllib.parse.urlencode({'amount': amount})
+            url = f"{self.api_url}/volume/decrease?{params}"
+            logger.debug(f"Decreasing volume by {amount}%")
+            
+            request = urllib.request.Request(
+                url,
+                method='POST',
+                headers={'User-Agent': 'NowPlayingSDL/1.0'}
+            )
+            
+            with urllib.request.urlopen(request, timeout=5) as response:
+                data = response.read().decode('utf-8')
+                result = json.loads(data)
+                
+                if result.get('success'):
+                    logger.info(f"Volume decreased: {result.get('message')}")
+                    return True
+                else:
+                    logger.warning(f"Failed to decrease volume: {result.get('message')}")
+                    return False
+                    
+        except urllib.error.HTTPError as e:
+            logger.error(f"HTTP error decreasing volume: {e.code} {e.reason}")
+            return False
+        except Exception as e:
+            logger.error(f"Error decreasing volume: {e}")
+            return False
+    
+    def mute_toggle(self) -> bool:
+        """Toggle mute on/off (toggles between 0% and 50% volume)
+        
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            url = f"{self.api_url}/volume/mute"
+            logger.debug("Toggling mute")
+            
+            request = urllib.request.Request(
+                url,
+                method='POST',
+                headers={'User-Agent': 'NowPlayingSDL/1.0'}
+            )
+            
+            with urllib.request.urlopen(request, timeout=5) as response:
+                data = response.read().decode('utf-8')
+                result = json.loads(data)
+                
+                if result.get('success'):
+                    logger.info(f"Mute toggled: {result.get('message')}")
+                    return True
+                else:
+                    logger.warning(f"Failed to toggle mute: {result.get('message')}")
+                    return False
+                    
+        except urllib.error.HTTPError as e:
+            logger.error(f"HTTP error toggling mute: {e.code} {e.reason}")
+            return False
+        except Exception as e:
+            logger.error(f"Error toggling mute: {e}")
+            return False
